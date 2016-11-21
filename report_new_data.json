@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "desc": "数据请求成功",
+  "colNames": [
+    "报表名称",
+    "报表类型"
+  ],
+  "colModel": [
+    {
+      "name": "tablename",
+      "index": "tablename",
+      "width": 200,
+      "sorttype": "text",
+      "sortable" : true,
+      "align": "center"
+    },
+    {
+      "name": "reporttype",
+      "index": "reporttype",
+      "width": 80,
+      "sorttype": "text",
+      "align": "center"
+    }
+  ]
+}
