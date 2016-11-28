@@ -45,7 +45,6 @@
 				<a id="btn-query" class="btn" style="font-size:12px;">查询</a>
 			</p>
 		</fieldset>
-		<input id = "generateXml" type = "button" value = "配置" />
 
 	</div>
 	<div class="col_main">
@@ -157,33 +156,84 @@
 		 });*/
 
 		$("#generateXml").die().live("click",function(){
-			$.post(URL + "getNewDataReport.action",
-					function(data){
-						console.log(data.success)
-						var dialog = new EBUPT.Util.SuperDialog( {
-							type: 1,
-							title: '可配置报表信息',
-							content: data.tableName,
-							detail: '',
-							btnType: 3,
-							winSize : 2
-						}, function(){
-							var options = {
-								$target: $('.content-main-grid'),
-								id: 'new-report',
-								columns_url: '${ctx}/data/report/report_new_data.json',
-								grid_url: URL + "getNewDataReport.action",
-								height: 280,
-								shrinkToFit: false,
-								grid_type: 'checkGrid'
-							};
-							ebGrid.ajaxJqGrid(options);
-						});
-						/*$.post(URL + "generateDeployFile.action",{"tableName":"总体运营日报表测试","tableCycleType":"1"},
-								function(data){
+			var content = EBUPT.Util.render({tpl : EBUPT.tpl.inputR,data : ""});
+			var dialog = new EBUPT.Util.SuperDialog( {
+				type: 1,
+				title: '可配置报表信息',
+				content: content,
+				detail: '',
+				btnType: 3,
+				winSize : 2
+			}, function(){
+				var id = $('#eb_grid_new-report').jqGrid('getGridParam',"selrow");
+				var rowData = $("#eb_grid_new-report").jqGrid('getRowData',id);
 
-								}, "json");*/
-					}, "json");
+				if($("#reportId").html()!="false"){
+					/*if((id === null || id.length <= 0)&&(($("#reportDescription").val()!="")||($("#dir").val()!=""))){
+						console.log("33")
+						$("#submitMessage").html("请勾选报表！");
+					}*/
+					$.post(URL + "saveReportDraft.action",{"tableName":rowData.tablename,"tableId":$("#reportId").html(),"description":$("#reportDescription").val(),"dir":$("#dir").attr("data")},
+							function(data){
+
+							}, "json");
+				}
+
+			});
+
+			$("#selectReport").die().live("click",function(){
+				$("#generateReport").attr("disabled",false);
+				$("#generateMessage").html("");
+				//$.post(URL + "getNewDataReport.action", function(data){
+				var options = {
+					$target: $('#newReport'),
+					id: 'new-report',
+					columns_url: '${ctx}/data/report/report_new_data.json',
+					grid_url: URL + "getNewDataReport.action",
+					height: 180,
+					shrinkToFit: false,
+					grid_type: 'checkGrid'
+				};
+				ebGrid.ajaxJqGrid(options);
+				//}, "json");
+			});
+
+			$("#generateReport").die().live("click",function() {
+				var id = $('#eb_grid_new-report').jqGrid('getGridParam',"selrow");
+				if(id === null || id.length <= 0 ){
+					EBUPT.Util.Dialog( {type : 5,content: "请先选择报表!",btnType : 3});
+					return;
+				}
+				var rowData = $("#eb_grid_new-report").jqGrid('getRowData',id);
+				$("#generateMessage").html(" 正在生成配置文件...");
+				$.post(URL + "generateDeployFile.action",{"tableName":rowData.tablename,"tableCycleType":rowData.reporttype},
+				 function(data){
+					if(data != "false"){
+						$("#generateMessage").html(" 生成配置文件成功!");
+						$("#generateReport").attr("disabled",true);
+						$("#reportId").html(data);
+						//其他报表数据设置为不可点击
+						var ids = $('#eb_grid_new-report').jqGrid('getDataIDs');
+						for( var i=0,j=ids.length ; i<j; i++){
+							if(ids[i]!=id) {
+								$('#jqg_eb_grid_new-report_'+ids[i]).attr("disabled",true);
+							}
+						}
+
+					}else{
+						$("#generateMessage").html(" 生成配置文件失败,请重新生成!");
+					}
+				 }, "json");
+			});
+
+			$('#choose_dir').die().live("click",function(){
+				var dirDialog = EBUPT.Util.Dialog( {title: '报表发布目录树',type : 1,content: '',btnType : 1,hideCloseIcon : true,extra : {zIndex: 9999}});
+				//加载tree
+				$("#" + dirDialog.contentId).append('<ul id="orgTree" class="ztree"></ul>');
+				EBUPT.Variable.treeSetting.async.url = EBUPT.Variable.ctx + "data/report/report_dir.json";
+				$.fn.zTree.init($("#orgTree"), EBUPT.Variable.treeSetting);
+			});
+
 		});
 
 
