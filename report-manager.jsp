@@ -168,14 +168,19 @@
 				var id = $('#eb_grid_new-report').jqGrid('getGridParam',"selrow");
 				var rowData = $("#eb_grid_new-report").jqGrid('getRowData',id);
 
-				if($("#reportId").html()!="false"){
+				if(($("#reportId").html()!="false")&&($("#reportId").html()!="")){
 					/*if((id === null || id.length <= 0)&&(($("#reportDescription").val()!="")||($("#dir").val()!=""))){
 						console.log("33")
 						$("#submitMessage").html("请勾选报表！");
 					}*/
 					$.post(URL + "saveReportDraft.action",{"tableName":rowData.tablename,"tableId":$("#reportId").html(),"description":$("#reportDescription").val(),"dir":$("#dir").attr("data")},
 							function(data){
-
+								if(data == "success"){
+									EBUPT.Util.Dialog( {type : 3,content: "保存报表信息成功",btnType : 3});
+									jQuery('#eb_grid_report-manage').trigger("reloadGrid");
+								}else{
+									EBUPT.Util.Dialog( {type : 3,content: "保存报表信息失败",btnType : 3});
+								}
 							}, "json");
 				}
 
@@ -489,7 +494,7 @@
 	}
 
 </script>
-<div id="newWin" class="float cf " style="width: 1100px;display: none; position : fixed; z-index: 2002;">
+<%--<div id="newWin" class="float cf " style="width: 1100px;display: none; position : fixed; z-index: 2002;">
 	<div class="float_header">
 		<h3>
 			<a id="closeIcon" class="close" href="javascript:void(0);" style="display: none;">×</a>
@@ -517,6 +522,6 @@
 			<div id="tips" class=" help-inline"></div>
 		</div>
 	</div>
-</div>
+</div>--%>
 </body>
 </html>
