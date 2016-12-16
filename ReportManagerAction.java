@@ -4,9 +4,12 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
+import javax.servlet.ServletContext;
+import javax.servlet.ServletContextEvent;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.ebupt.mrrs.engine.cache.CacheInitTask;
 import com.ebupt.mrrs.engine.metadata.entity.*;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -577,10 +580,12 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				for(Iterator<BaseDrillDown> iter = reportDesign.getCubeDefinition().getDrillDownList().iterator();iter.hasNext();){
 					Map<String, Object> map = new HashMap<String, Object>();
 					BaseDrillDown drill = iter.next();
-//					map.put("dimension", drill.getDimensionDefinition().getDimensionList());
+					map.put("dimension", drill.getDimensionDefinition().getDimensionList());
 					map.put("measure", drill.getMeasureDefinition().getMeasureList());
 					logger.info(drill.getDrillGroup());
-					map.put("dimension", metaDataManager.getDimensionByIdString(drill.getDrillGroup()));
+//					map.put("dimension", metaDataManager.getDimensionByIdString(drill.getDrillGroup()));
+					//系统之前维度组合的名字是用维度的名字拼接的，现改成直接用维度组合的名字表示
+					map.put("drillName",drill.getDrillValueChn());
 
 					drillDowns.add(map);
 				}
@@ -634,86 +639,206 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 	//获取可以进行配置的报表信息lyw
 	public void getNewDataReport() throws IOException {
-		StringBuffer result = new StringBuffer("{");
-		//String report = new String();
+		String report = new String();
 		try {
-			List<ReportInfoConfig> reportInfoList = reportInfoService.getNewDataReport();
-			/*Page reportInfoList = reportInfoService.getNewDataReport();
-			report = generateJqGridData(reportInfoList);*/
+			//List<ReportInfoConfig> reportInfoList = reportInfoService.getNewDataReport();
+			Page reportInfoList = reportInfoService.getNewDataReport();
+			report = generateJqGridData(reportInfoList);
 
-			result.append("\"success\": true");
-			result.append(",\"desc\": \"数据请求成功\"");
-			result.append(",\"data\": [");
-			for(ReportInfoConfig obj : reportInfoList){
+			/*for(ReportInfoConfig obj : reportInfoList){
 				List<String> drilldownList = new ArrayList<String>();
 				for(Drilldown drilldown : obj.getDrilldownList()){
 					drilldownList.add(drilldown.getDrilldownName());
 				}
-				result.append("{");
-				result.append("\"tableName\":"+obj.getTableName());
-				result.append("\"tableCycleType\":"+obj.getReportType());
-				result.append("\"drilldown\":"+drilldownList);
-				result.append("},");
-			}
-			result.deleteCharAt(result.length()-1);
-			result.append("]}");
+				result.put("tableName",obj.getTableName());
+				result.put("tableCycleType",obj.getReportType());
+				result.put("drilldown",drilldownList);
+			}*/
+
 
 		} catch (Exception e) {
-			result.append("\"success\": false");
 			e.printStackTrace();
 		}
-		writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson(result));
+		//writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson(result));
+		writerMessage2Client(ServletActionContext.getResponse(), report);
+
+	}
+
+	//对生成的报表保存报表描述、发布目录等信息lyw
+	public void saveReportDraft() throws IOException{
+		HttpServletRequest request = ServletActionContext.getRequest();
+		String tableName = request.getParameter("tableName");
+		String tableId = request.getParameter("tableId");
+		String description = request.getParameter("description");
+		String dir = request.getParameter("dir");
+		if((StringUtils.isBlank(description))&&(StringUtils.isBlank(dir))){
+			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
+			return;
+		}
+		try{
+			List<ReportInfo> reportInfos = reportInfoService.getReportNum(tableName);
+			ReportInfo reportInfo = reportInfos.get(0);
+			if(StringUtils.isNotBlank(description)){
+				reportInfo.setDescription(description);
+			}
+			if(StringUtils.isNotBlank(dir)){
+				reportInfo.setPublishDir(dir);
+			}
+
+			reportInfoService.updateDraftByName(reportInfo);
+
+			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
+
+			/*ReportInfo reportInfo = new ReportInfo();
+			reportInfo.setReportId(tableId);
+			reportInfo.setTableName(tableName);
+			reportInfo.setDescription(description);
+			reportInfo.setPublishDir(dir);
+			reportInfo.setPublishUrl("");
+			reportInfo.setEnableSub("");
+			reportInfo.setCreator(SpringSecurityUtils.getCurrentUserName());
+			reportInfo.setCreateTime(DateUtil.getCurrentTime("yyyy-MM-dd HH:mm:ss"));
+			reportInfo.setState("0");
+
+			reportInfoService.saveOrUpdateDraft(reportInfo);*/
+		}catch (Exception e){
+			e.printStackTrace();
+			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("false"));
+		}
+
 
 	}
 
 	//对选中的报表自动生成id和xml配置文件lyw
-	public String generateDeployFile() throws IOException{
+	public void generateDeployFile() throws IOException,RSException{
 		HttpServletRequest request = ServletActionContext.getRequest();
 		String tableName = request.getParameter("tableName");//报表名字
 		String tableCycleType = request.getParameter("tableCycleType");//报表类型：日报月报
-		//不应该查找count（*） 应该找到实体list
+		if(tableCycleType.equals("日报表")){
+			tableCycleType = "day";
+		}else if(tableCycleType.equals("周报表")){
+			tableCycleType = "week";
+		}else if (tableCycleType.equals("当月累计报表")){
+			tableCycleType = "month";
+		}else{
+			tableCycleType = "month";
+		}
+		String state = new String();
+		//查找报表草稿表中是否有该报表
 		List<ReportInfo> reportInfos = reportInfoService.getReportNum(tableName);
 		//获取选中报表的配置信息
 		ReportInfoConfig reportInfoConfig = reportInfoService.getConfigInfoByName(tableName);
 		if(reportInfos.size() == 0){
-			//新增报表配置信息
-			String reportId = generateXmlFile(tableName,tableCycleType,reportInfoConfig);
-			String state = new String();
-			if(reportId != null){
-				state = generateSqlFile(reportInfoConfig.getDrilldownList(),tableCycleType);
-			}
+			//成功返回报表ID 失败返回false
+			state = generateReport(tableName,tableCycleType,reportInfoConfig,new ReportInfo(),request);
 
-			if ((state.equals("success")) && (reportId != null)){
-				//生成xml和sql成功就存库
-				//String reportId = UUID.randomUUID().toString().replaceAll("-", "");
-				ReportInfo reportInfo = new ReportInfo();
-				reportInfo.setReportId(reportId);
-				reportInfo.setTableName(tableName);
+		}else{
+			//修改报表配置信息，删除以前的xml
+			for(ReportInfo reportInfo :reportInfos){
+				//getid
+				String id = reportInfo.getReportId();
+
 				try{
-					reportInfoService.saveOrUpdateDraft(reportInfo);
-					LogRecord.createMngLog("新增报表草稿:"+reportInfo.getTableName(), "新增成功","");
-				}catch(Exception e){
+					//删除sql文件
+					ReportDesign reportDesign = RSXmlLoader.load(request.getSession().getServletContext().getRealPath("report")+Constants.FSP+id+".xml");
+					for(Iterator<BaseDrillDown> iter = reportDesign.getCubeDefinition().getDrillDownList().iterator();iter.hasNext();){
+						Map<String, Object> map = new HashMap<String, Object>();
+						BaseDrillDown drill = iter.next();
+						String sqlId = drill.getQueryString().getId();
+
+						String savePath = request.getSession().getServletContext().getRealPath("report/vm");
+						File savedir = new File(savePath);
+						File xmlFile = new File(savedir+Constants.FSP+sqlId+".sql.vm");
+						if(xmlFile.exists()&&xmlFile.isFile()){
+							xmlFile.delete();
+						}
+
+					}
+
+					//删除xml
+					String savePath = request.getSession().getServletContext().getRealPath("report");
+					File savedir = new File(savePath);
+					File xmlFile = new File(savedir+Constants.FSP+id+".xml");
+					if(xmlFile.exists()&&xmlFile.isFile()){
+						xmlFile.delete();
+					}
+
+				}catch (Exception e){
 					e.printStackTrace();
-					LogRecord.createMngLog("新增报表草稿:"+reportInfo.getTableName(), "新增成功","");
 				}
 
 			}
+			//重新生成xml，并修改数据库
+			state = generateReport(tableName,tableCycleType,reportInfoConfig,reportInfos.get(0),request);
+		}
+		//生成xml后刷新缓存
+		CacheInitTask cacheInitTask = new CacheInitTask(ServletActionContext.getRequest().getSession().getServletContext());
+		cacheInitTask.run();
 
-		}else{
-			//修改报表配置信息，删除以前的xml再重新生成
-			for(ReportInfo reportInfo :reportInfos){
-				//getid然后删除xml
-				String id = reportInfo.getReportId();
-				//---------
-			}
-			//---
+
+		writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson(state));//返回是否生成xml生成xml成功
+	}
+
+	//选中的报表生成配置文件、存库、修改元数据配置表等操作
+	public String generateReport(String tableName, String tableCycleType, ReportInfoConfig reportInfoConfig, ReportInfo reportInfo,HttpServletRequest request) throws IOException{
+		String state = new String();
+		//新增报表配置信息
+		String reportId = generateXmlFile(tableName,tableCycleType,reportInfoConfig,request);
+		String sqlState = new String();
+		if(reportId != null){
+			sqlState = generateSqlFile(reportInfoConfig.getDrilldownList(),tableCycleType,request);
 		}
 
-		return "success";//返回是否生成xml生成xml成功
+		if ((sqlState.equals("success")) && (reportId != null)){
+			try{
+				//生成xml和sql成功就存库
+				//String reportId = UUID.randomUUID().toString().replaceAll("-", "");
+				if(StringUtils.isBlank(reportInfo.getTableName())){
+					reportInfo.setReportId(reportId);
+					reportInfo.setTableName(tableName);
+					reportInfo.setCreateTime(DateUtil.getCurrentTime("yyyy-MM-dd HH:mm:ss"));
+					reportInfo.setCreator(SpringSecurityUtils.getCurrentUserName());
+					reportInfo.setDescription("");
+					reportInfo.setEnableSub("");
+					reportInfo.setPublishDir("");
+					reportInfo.setPublishUrl("");
+					reportInfoService.saveOrUpdateDraft(reportInfo);
+					LogRecord.createMngLog("新增报表草稿:"+reportInfo.getTableName(), "新增成功","");
+				}else{
+					reportInfo.setReportId(reportId);
+					if(StringUtils.equals("1", reportInfo.getState())){
+						reportInfo.setState("2");
+					}
+					reportInfoService.updateDraftByName(reportInfo);
+					LogRecord.createMngLog("修改报表草稿:"+reportInfo.getTableName(), "修改成功","");
+				}
+
+				//修改元数据配置表报表状态
+				reportInfoService.updateReportMataData(tableName);
+				state = reportId;
+
+			}catch(Exception e){
+				e.printStackTrace();
+				LogRecord.createMngLog("保存报表草稿:"+reportInfo.getTableName(), "保存失败","");
+				state = "false";
+				//writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
+				//return;
+			}
+
+		}else{
+			state = "false";
+		}
+
+		/*if((!sqlState.equals("success")) || (reportId == null)){
+			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
+			return;
+		}*/
+
+		return state;
 	}
 
 	//生成xml文件lyw
-	public String generateXmlFile(String tableName,String tableCycleType,ReportInfoConfig reportInfoConfig) throws IOException{
+	public String generateXmlFile(String tableName,String tableCycleType,ReportInfoConfig reportInfoConfig,HttpServletRequest request) throws IOException{
 		String reportId = UUID.randomUUID().toString().replaceAll("-", "");
 		Dimension dimensionStartDate = new Dimension();
 		Dimension dimensionEndDate = new Dimension();
@@ -722,6 +847,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		List<Attribute> attributes = new ArrayList<Attribute>();
 		//Attribute attribute = new Attribute("name",tableName);
 		attributes.add(new Attribute("name",tableName));
+		attributes.add(new Attribute("type","0"));
 		attributes.add(new Attribute("id",reportId));
 		attributes.add(new Attribute("cycleType",tableCycleType));
 
@@ -799,7 +925,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			attributesD.add(new Attribute("id",drilldownId));
 			attributesD.add(new Attribute("drillValueChn",reportInfoConfig.getDrilldownList().get(i).getDrilldownName()));
 
-			Element drilldown = new Element("drilldown").setAttributes(attributesD);
+			Element drilldown = new Element("drillDown").setAttributes(attributesD);
 			Element parameterSet = new Element("parameterSet");
 			//dimensions
 			Element dimensions = new Element("dimensions");
@@ -824,23 +950,25 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				}
 				Element parameter = new Element("parameter").setAttribute("id",reportInfoConfig.getDrilldownList().get(i).getDimensions().get(j).getParameterId());
 				//dimensions
-				if(dim.getIsQuery().equals("2")){
-					//非查询列放到dimensions标签
+				if(dim.getIsQuery().equals("1")){
+					//查询列放到dimensions标签
 					Element dimension = new Element("dimension").setAttribute("id",UUID.randomUUID().toString().replaceAll("-", ""));
+					//dimension.addContent(new Element("dimensionId").setText(String.valueOf(dim.getId())));
 					dimension.addContent(new Element("copyFrom").setText(reportInfoConfig.getDrilldownList().get(i).getDimensions().get(j).getParameterId()));
 					dimension.addContent(new Element("drillLevel").setText(String.valueOf(dimensionLevel)));
 					dimensions.addContent(dimension);
 					dimensionLevel++;
-					//非查询列默认加入到指标中
-					Element dimensionMeasure = new Element("measure").setAttribute("id",UUID.randomUUID().toString().replaceAll("-", ""));
-					dimensionMeasure.addContent(new Element("name").setText(dim.getName()));
-					dimensionMeasure.addContent(new Element("dataType").setText("java.Lang.String"));
-					dimensionMeasure.addContent(new Element("dataset").setText(dim.getTableOwner()+'.'+dim.getTableName()));
-					dimensionMeasure.addContent(new Element("column").setText(dim.getName()));
-					dimensionMeasure.addContent(new Element("showName").setText(dim.getNameChn()));
-					dimensionMeasure.addContent(new Element("showFormat").setText(""));
-					measurs.addContent(dimensionMeasure);
+
 				}
+				//查询列和非查询列都默认加入到指标中
+				Element dimensionMeasure = new Element("measure").setAttribute("id",UUID.randomUUID().toString().replaceAll("-", ""));
+				dimensionMeasure.addContent(new Element("name").setText(dim.getName()));
+				dimensionMeasure.addContent(new Element("dataType").setText("java.Lang.String"));
+				dimensionMeasure.addContent(new Element("dataset").setText(dim.getTableOwner()+'.'+dim.getTableName()));
+				dimensionMeasure.addContent(new Element("column").setText(dim.getName()));
+				dimensionMeasure.addContent(new Element("showName").setText(dim.getNameChn()));
+				dimensionMeasure.addContent(new Element("showFormat").setText(""));
+				measurs.addContent(dimensionMeasure);
 
 				parameterSet.addContent(parameter);
 			}
@@ -875,12 +1003,27 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 		root.addContent(cube);
 
-		// 输出 books.xml 文件；
 		// 使xml文件 缩进效果
         try{
             Format format = Format.getPrettyFormat();
             XMLOutputter XMLOut = new XMLOutputter(format);
-            XMLOut.output(Doc, new FileOutputStream("D:/"+reportId+".xml"));
+            //XMLOut.output(Doc, new FileOutputStream("D:/"+reportId+".xml"));
+
+			//输出到服务器
+			String savePath = request.getSession().getServletContext().getRealPath("report");
+			File savedir = new File(savePath);
+			if (!savedir.exists()) {
+				savedir.mkdirs();
+			}
+
+			//重复上传文件控制，旧文件删除
+			File xmlFile = new File(savedir+Constants.FSP+getId()+".xml");
+			if(xmlFile.exists()&&xmlFile.isFile()){
+				xmlFile.delete();
+			}
+			//copyFile(file, new File(savedir+Constants.FSP+getId()+".xml"));
+			XMLOut.output(Doc, new FileOutputStream(savedir+Constants.FSP+reportId+".xml"));
+
 
         }catch(Exception e){
             e.printStackTrace();
@@ -890,10 +1033,18 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 	}
 
 	//生成sql文件lyw
-    public String generateSqlFile(List<Drilldown> drilldownList,String tableType) {
+    public String generateSqlFile(List<Drilldown> drilldownList,String tableType,HttpServletRequest request) {
         for (Drilldown drilldown : drilldownList){
             try{
-                Writer w=new FileWriter("D:/"+drilldown.getQuerySqlId()+".sql.vm");
+				//输出到服务器
+				String savePath = request.getSession().getServletContext().getRealPath("report/vm");
+				File savedir = new File(savePath);
+				if (!savedir.exists()) {
+					savedir.mkdirs();
+				}
+				Writer w=new FileWriter(savedir+Constants.FSP+drilldown.getQuerySqlId()+".sql.vm");
+
+                //Writer w=new FileWriter("D:/"+drilldown.getQuerySqlId()+".sql.vm");
                 BufferedWriter buffWriter=new BufferedWriter(w);
 
                 StringBuffer buffer = new StringBuffer();
@@ -901,17 +1052,17 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
                 /*for(Dimension dimension : drilldown.getDimensions()){
                     buffer.append(dimension.getName()+",");
                 }*/
-                if(tableType.equals("1")||tableType.equals("2")){
+                if(tableType.equals("day")||tableType.equals("week")){
                     buffer.append("RECORD_DAY ");
                 }else{
                     buffer.append("RECORD_MONTH ");
                 }
                 //buffer.deleteCharAt(buffer.length()-1);
                 buffer.append(" \n").append("#set($sep=\",\") \n");
-                buffer.append("#foreach($value in $measure) \n\t").append("$sep \n\t").append("$value \n");
+                buffer.append("#foreach($value in $measure) \n\t").append("$sep \n\t").append("$value \n").append("#end \n");
                 buffer.append("FROM \n\t").append(drilldown.getTableOwner()+"."+drilldown.getTableName()+" \n");
                 buffer.append("WHERE 1=1 \n\t");
-                if(tableType.equals("1")||tableType.equals("2")){
+                if(tableType.equals("day")||tableType.equals("week")){
                     //日报表：1 周报表：2
                     buffer.append("#if($start_date && $end_date ) \n\t\t");
                     buffer.append("AND RECORD_DAY >= '$start_date' \n\t\t");
@@ -930,13 +1081,27 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
                     buffer.append("#end \n\t");
                 }
 
+                //筛选条件
                 for(Dimension dimension : drilldown.getDimensions()){
                     if(dimension.getName().equalsIgnoreCase("province_id")){
-
-                    }else if(dimension.getName().equalsIgnoreCase("province_id")){
+						buffer.append("#if($dim_province_id && $dim_city_id) \n\t\t");
+						buffer.append("AND ( province_id in ('$dim_province_id') or city_id in ('$dim_city_id')) \n\t");
+						buffer.append("#elseif($dim_province_id) \n\t\t");
+						buffer.append("AND province_id in ('$dim_province_id') \n\t");
+						buffer.append("#elseif($dim_city_id) \n\t\t");
+						buffer.append("AND city_id in ('$dim_city_id') \n\t").append("#end \n\t");
+                    }else if((dimension.getName().equalsIgnoreCase("city_id"))||(dimension.getName().equalsIgnoreCase("record_day"))||(dimension.getName().equalsIgnoreCase("record_month"))){
                         continue;
                     }else{
-
+						buffer.append("#if($dim_"+dimension.getName().toLowerCase()+ ")  \n\t\t");
+						if(dimension.getIsQuery().equals("1")){
+							//查询列
+							buffer.append("AND "+dimension.getName().toLowerCase()+ " in ('$dim_" +dimension.getName().toLowerCase()+"') \n\t");
+						}else{
+							//非查询列
+							buffer.append("AND "+dimension.getName().toLowerCase()+ " = '$dim_" +dimension.getName().toLowerCase()+"' \n\t");
+						}
+						buffer.append("#end \n\t");
                     }
                 }
 
