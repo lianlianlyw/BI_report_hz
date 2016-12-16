@@ -1,0 +1,196 @@
+package com.ebupt.mrrs.engine.cache;
+
+import com.ebupt.mrrs.context.ContextHolder;
+import com.ebupt.mrrs.engine.Constants;
+import com.ebupt.mrrs.engine.RSException;
+import com.ebupt.mrrs.engine.cache.dao.CacheInitDao;
+import com.ebupt.mrrs.engine.design.ReportDesign;
+import com.ebupt.mrrs.engine.metadata.MetaDataManager;
+import com.ebupt.mrrs.engine.metadata.entity.Dimension;
+import com.ebupt.mrrs.engine.metadata.entity.Measure;
+import com.ebupt.mrrs.engine.metadata.entity.ReportInfoConfig;
+import com.ebupt.mrrs.engine.xml.RSXmlLoader;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimerTask;
+
+import javax.servlet.ServletContext; 
+
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheException;
+import net.sf.ehcache.Element;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+/**
+ * 初始化报表缓存
+ * 初始化指标缓存
+ * 初始化维度缓存
+ * 服务器启动自动执行
+ * @author hlb
+ *
+ */
+public class CacheInitTask extends TimerTask {
+	
+	private static Log logger = LogFactory.getLog(CacheInitTask.class);
+
+    private ServletContext context = null;
+    
+    public CacheInitTask(ServletContext context){
+    	this.context=context;
+    }
+    
+    @Override  
+    public void run() {
+    	EhcacheUtil.addCacheByName("report");
+    	EhcacheUtil.addCacheByName("xml");
+    	EhcacheUtil.addCacheByName("measure");
+    	EhcacheUtil.addCacheByName("dimension");
+    	Cache reportCache = EhcacheUtil.getCacheByName("report");
+    	Cache xmlCache = EhcacheUtil.getCacheByName("xml");
+    	Cache measureCache = EhcacheUtil.getCacheByName("measure");
+    	Cache dimensionCache = EhcacheUtil.getCacheByName("dimension");
+    	Set<String> keys = null;
+    	try{
+    		//-------------初始化指标缓存--------------------
+	    	Map<String,Measure> measureMap = initMeasureMap();
+	    	keys = measureMap.keySet();
+	    	for (Iterator it = keys.iterator(); it.hasNext();) {
+				String key = (String) it.next();
+				measureCache.put(new Element(key, measureMap.get(key)));
+			}
+	    	logger.info("=========initMeasureMap end()!============");
+	    	
+	    	//-------------初始化维度缓存--------------------
+	    	Map<String,Dimension> dimensionMap = initDimensionMap();
+	    	keys = dimensionMap.keySet();
+	    	for (Iterator it = keys.iterator(); it.hasNext();) {
+				String key = (String) it.next();
+				dimensionCache.put(new Element(key, dimensionMap.get(key)));
+			}
+	    	
+    		//-------------初始化XML缓存--------------------
+        	Map<String,ReportDesign> reportXMLMap = initReportXMLMap();
+        	keys = reportXMLMap.keySet();
+        	for (Iterator it = keys.iterator(); it.hasNext();) {
+    			String key = (String) it.next();
+    			xmlCache.put(new Element(key, reportXMLMap.get(key)));
+    		}
+        	logger.info("=========initReportXMLMap end()!============");
+	    	//-------------初始化报表缓存--------------------
+	    	Map<String,ReportInfoConfig> reportMap = initReportMap();
+			keys = reportMap.keySet();
+			for (Iterator it = keys.iterator(); it.hasNext();) {
+				String key = (String) it.next();
+				reportCache.put(new Element(key, reportMap.get(key)));
+			}
+			logger.info("=========initReportMap end()!============");
+	    	
+    	logger.info("=========initDimensionMap end()!============");
+    	
+		} catch (IllegalStateException e) {
+			e.printStackTrace();
+		} catch (CacheException e) {
+			e.printStackTrace();
+		}
+    }
+    
+    private Map<String,ReportInfoConfig> initReportMap(){
+    	logger.info("=========initReportMap run()!============");
+    	CacheInitDao cacheInitDao = (CacheInitDao)ContextHolder.getBean("cacheInitDao");
+    	MetaDataManager metaDataManager = (MetaDataManager)ContextHolder.getBean("metaDataManager");
+    	if(null == cacheInitDao){
+			throw new RuntimeException("从Spring容器中获取id为cacheInitDao的bean失败 !");
+		}
+    	Map<String,ReportInfoConfig> result = cacheInitDao.getReportInfoConfigMap();
+    	Set<String> key = result.keySet();
+        for (Iterator it = key.iterator(); it.hasNext();) {
+            String s = (String) it.next();
+            ReportInfoConfig entity = result.get(s);
+            if(StringUtils.isNotBlank(entity.getDimension())){
+            	entity.setDimensionList(metaDataManager.getDimensionByIdString(entity.getDimension()));
+            }
+            if(StringUtils.isNotBlank(entity.getMeasure())){
+            	entity.setMeasureList(metaDataManager.getMeasureByIdString(entity.getMeasure()));
+            }
+            result.put(s, entity);
+        }
+    	return result;
+    }
+    
+    private Map<String,Measure> initMeasureMap(){
+    	logger.info("=========initMeasureMap run()!============");
+    	CacheInitDao cacheInitDao = (CacheInitDao)ContextHolder.getBean("cacheInitDao");
+    	if(null == cacheInitDao){
+			throw new RuntimeException("从Spring容器中获取id为cacheInitDao的bean失败 !");
+		}
+    	return cacheInitDao.getMeasureMap();
+    }
+    
+    private Map<String,Dimension> initDimensionMap(){
+    	logger.info("=========initDimensionMap run()!============");
+    	CacheInitDao cacheInitDao = (CacheInitDao)ContextHolder.getBean("cacheInitDao");
+    	if(null == cacheInitDao){
+			throw new RuntimeException("从Spring容器中获取id为cacheInitDao的bean失败 !");
+		}
+    	return cacheInitDao.getDimensionMap();
+    }
+    
+    private Map<String,ReportDesign> initReportXMLMap(){
+    	logger.info("=========initReportXMLMap run()!============");
+    	String rootPath = System.getProperty("user.dir");
+    	System.out.println(rootPath);
+
+		//本地环境jetty
+		//String savePath = rootPath.replace("engine", "web")+Constants.FSP+"src"+Constants.FSP+"main"+Constants.FSP+"webapp"+Constants.FSP+"report"+Constants.FSP;
+		//线上环境tomcat
+		String savePath = rootPath.substring(0,rootPath.length())+ ("/webapps/mrrs/report/");
+		CacheInitDao cacheInitDao = (CacheInitDao)ContextHolder.getBean("cacheInitDao");
+    	Map<String,ReportDesign> map = new HashMap<String,ReportDesign>();
+    	try{
+    		List<String> reportList = cacheInitDao.getReportList();
+    		for(String reportId:reportList){
+    			File xmlFile = new File(savePath+reportId+".xml");
+    			System.out.println(xmlFile.getAbsolutePath());
+    			System.out.println(xmlFile.exists());
+    			if(xmlFile.exists()){
+    				map.put(reportId, RSXmlLoader.load(xmlFile.getAbsolutePath()));
+    				cacheInitDao.updateReportConfig(RSXmlLoader.load(xmlFile.getAbsolutePath()));
+    			}else{
+    				map.put(reportId, null);
+    			}
+    		}
+    	}catch(RSException e){
+    		e.printStackTrace();
+    	}
+    	return map;
+    }
+    
+    /**
+     * 取得指定目录下的所有文件列表，包括子目录.
+     * @param baseDir File 指定的目录
+     * @return 包含java.io.File的List
+     */
+	public static List<File> getSubFiles(File baseDir){
+		List<File> ret=new ArrayList<File>();
+		//File base=new File(baseDir);
+		File[] tmp=baseDir.listFiles();
+		for (int i = 0; i <tmp.length; i++) {
+			if(tmp[i].isFile()){
+				ret.add(tmp[i]);
+			}
+			if(tmp[i].isDirectory()){
+				ret.addAll(getSubFiles(tmp[i]));
+			}
+		}
+		return ret;
+	}
+}
