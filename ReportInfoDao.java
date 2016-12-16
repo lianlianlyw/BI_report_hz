@@ -300,9 +300,32 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 		});
 		return reportDirList;
 	}
+	//完成配置文件后，修改报表元数据配置表中报表状态
+    public void updateReportMataData(String tableName){
+        if(StringUtils.isBlank(tableName)){
+            return;
+        }
+        StringBuffer sqlBuff = new StringBuffer();
+        sqlBuff.append("UPDATE CONF_REPORT_METADATA SET STATE = '2' WHERE REPORT_NAME_CHN = '" + tableName +"' ");
+
+        jdbcTemplate.update(sqlBuff.toString());
+    }
+
+    //根据报表名字更新报表ID 状态 描述 目录信息
+    public void  updateDraftByName(ReportInfo reportInfo){
+        StringBuffer sqlBuff = new StringBuffer();
+        sqlBuff.append("UPDATE T_REPORT_INFO_DRAFT " +
+                        " SET STATE = '" + reportInfo.getState() + "' , " +
+                        " TABLE_ID = '"+ reportInfo.getReportId() +"' , " +
+                        " REMARK = '" + reportInfo.getDescription() +"' , " +
+                        " PUBLISH_DIR = '"+ reportInfo.getPublishDir() +"' " +
+                        " WHERE TABLE_NAME = '" + reportInfo.getTableName() +"' ");
+
+        jdbcTemplate.update(sqlBuff.toString());
+    }
 
 	//获取可以进行配置的报表信息lyw
-	public List<ReportInfoConfig> getNewDataReport() {
+	public Page getNewDataReport() {
 		StringBuffer sqlBuff = new StringBuffer();
 		sqlBuff.append("SELECT DISTINCT" +
 				" (REPORT_NAME_CHN)," +
@@ -330,7 +353,23 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 			}});
 
 		for(ReportInfoConfig rInfoConfig : reportInfoConfigList){
+			if(rInfoConfig.getReportType().equals("1")){
+				rInfoConfig.setReportType("日报表");
+			}else if (rInfoConfig.getReportType().equals("2")){
+				rInfoConfig.setReportType("周报表");
+			}else if (rInfoConfig.getReportType().equals("3")){
+				rInfoConfig.setReportType("当月累计报表");
+			}else{
+				rInfoConfig.setReportType("月报表");
+			}
 			rInfoConfig = getDrilldownsByReport(rInfoConfig);
+
+			StringBuffer drill = new StringBuffer();
+			for(Drilldown drilldown :rInfoConfig.getDrilldownList()){
+				drill.append(drilldown.getDrilldownName()+",");
+			}
+			drill.deleteCharAt(drill.length()-1);
+			rInfoConfig.setDrilldownName(drill.toString());
 
 			//报表添加维度
 			/*HashSet<Dimension> hs = new HashSet<Dimension>(dimensionListR);
@@ -340,10 +379,12 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 
 		}
 
-		/*Page page = new Page();
-		page.setResult(reportInfoConfigList);*/
+		Page page = new Page();
+		page.setResult(reportInfoConfigList);
+		page.setTotalCount(reportInfoConfigList.size());
+		page.setPageSize(10);
 
-		return reportInfoConfigList;
+		return page;
 	}
 
 	//获取报表的维度组合信息
@@ -389,7 +430,7 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 					" FROM CONF_REPROT_TABLE_DICTIONARY " +
 					" WHERE  TABLE_OWNER = '" + drilldown.getTableOwner() + "' " +
 					" AND TABLE_NAME = '" + drilldown.getTableName() + "' " +
-					" AND COL_TYPE = '1' ");//查出维度
+					" AND COL_TYPE = '1' " );//查出维度-查询列和非查询列
 			final List<Dimension> dimensionList = new ArrayList<Dimension>();
 			//添加维度
 
@@ -408,6 +449,38 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 					}while(rs.next());
 
 				}});
+
+			/*sqlBuff.setLength(0);
+			sqlBuff.append("SELECT" +
+					" COL_NAME, " +
+					" COL_CHN_NAME, " +
+					" TABLE_OWNER," +
+					" TABLE_NAME, " +
+					" IS_QUERY," +
+					" D.ID AS ID " +
+					" FROM CONF_REPROT_TABLE_DICTIONARY C , T_REPORT_DIMENSION D " +
+					" WHERE C.COL_CHN_NAME = D.NAME_CHN " +
+					" AND TABLE_OWNER = '" + drilldown.getTableOwner() + "' " +
+					" AND TABLE_NAME = '" + drilldown.getTableName() + "' " +
+					" AND COL_TYPE = '1' " +
+					" AND IS_QUERY = '1' ");//查出维度-查询列（同时查出维度ID）
+
+			jdbcTemplate.query(sqlBuff.toString(), new RowCallbackHandler(){
+				@Override
+				public void processRow(ResultSet rs) throws SQLException {
+					do{
+						Dimension dimension = new Dimension();
+						dimension.setId(Long.parseLong(rs.getString("ID")));
+						dimension.setName(rs.getString("COL_NAME"));
+						dimension.setNameChn(rs.getString("COL_CHN_NAME"));
+						dimension.setIsQuery(rs.getString("IS_QUERY"));
+						dimension.setTableOwner(rs.getString("TABLE_OWNER"));
+						dimension.setTableName(rs.getString("TABLE_NAME"));
+						dimensionList.add(dimension);
+					}while(rs.next());
+
+				}});*/
+
 			drilldown.setDimensions(dimensionList);
 
 			sqlBuff.setLength(0);
