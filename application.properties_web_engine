@@ -1,0 +1,21 @@
+#oracle version database settings
+jdbc.driver=oracle.jdbc.driver.OracleDriver
+#本地地址
+#jdbc.url=jdbc:oracle:thin:@(DESCRIPTION =(FAILOVER = ON)(ADDRESS_LIST =(ADDRESS = (PROTOCOL = TCP)(HOST = 211.140.17.121)(PORT = 1521)))(CONNECT_DATA =(SERVICE_NAME = datasupport.ebput.com)(FAILOVER_MODE =(TYPE = SELECT)(METHOD = BASIC)(RETRIES = 20)(DELAY = 5))))
+jdbc.username=mrrstest
+jdbc.password=mrrstest123qaz
+
+#服务器地址
+jdbc.url=jdbc:oracle:thin:@(DESCRIPTION =(FAILOVER = ON)(ADDRESS_LIST =(ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.5.140)(PORT = 1521)))(CONNECT_DATA =(SERVICE_NAME = zjdw.ebput.com)(FAILOVER_MODE =(TYPE = SELECT)(METHOD = BASIC)(RETRIES = 20)(DELAY = 5))))
+
+#jdbc.username=mrrs
+#jdbc.password=cx_123456
+
+#hibernate settings
+hibernate.dialect=org.hibernate.dialect.Oracle10gDialect
+hibernate.show_sql=true
+hibernate.format_sql=true
+hibernate.ehcache_config_file=/ehcache/ehcache-hibernate-local.xml
+
+#memcached settings
+#memcached.url=127.0.0.1:11211
