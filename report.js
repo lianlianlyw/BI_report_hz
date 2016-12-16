@@ -836,12 +836,13 @@ EBUPT.tpl = {
 														'<h5>'+
 														'<label>'+
 																'维度组合：' +
-																'<% for(var j = 0;j < (reportData.drill)[i].dimension.length; j ++){%>'+
+																/*'<% for(var j = 0;j < (reportData.drill)[i].dimension.length; j ++){%>'+
 																	'<%=((reportData.drill[i]).dimension)[j].nameChn%> '+
 																	 '<% if(j != (reportData.drill)[i].dimension.length - 1){%>'+
 																	 	'+'+
 																	 '<%}%>'+
-																'<%}%>'+
+																'<%}%>'+*/
+																'<%=(reportData.drill)[i].drillName%>' +
 														'</label>'+
 														'</h5>'+
 														'<div class="inputs measure">'+
