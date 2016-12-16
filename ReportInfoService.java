@@ -174,7 +174,7 @@ public class ReportInfoService  extends BaseService{
 
 	//获取可以进行配置的报表信息lyw
 	@Transactional(propagation=Propagation.NOT_SUPPORTED,readOnly=true)
-	public List<ReportInfoConfig> getNewDataReport() {
+	public Page getNewDataReport() {
 		return reportInfoDao.getNewDataReport();
 	}
 	//查看报表是否已经存在lyw
@@ -183,4 +183,11 @@ public class ReportInfoService  extends BaseService{
 	}
 	//对选中的报表获取配置信息
 	public ReportInfoConfig getConfigInfoByName(String tableName) { return reportInfoDao.getConfigInfoByName(tableName); }
+    //生成配置文件后，修改元数据配置表报表状态
+    public void updateReportMataData (String tableName){
+        reportInfoDao.updateReportMataData(tableName);
+    }
+    public void updateDraftByName (ReportInfo reportInfo){
+        reportInfoDao.updateDraftByName(reportInfo);
+    }
 }
