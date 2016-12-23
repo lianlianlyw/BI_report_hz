@@ -72,7 +72,31 @@ public class Dimension implements Serializable {
     @Transient
     private String tableName;
 
-    public String getTableOwner() {
+	@Transient
+	//维度表属主
+	private String dimTableOwner;
+
+	@Transient
+	//维度表表名
+	private String dimTableName;
+
+	public String getDimTableOwner() {
+		return dimTableOwner;
+	}
+
+	public void setDimTableOwner(String dimTableOwner) {
+		this.dimTableOwner = dimTableOwner;
+	}
+
+	public String getDimTableName() {
+		return dimTableName;
+	}
+
+	public void setDimTableName(String dimTableName) {
+		this.dimTableName = dimTableName;
+	}
+
+	public String getTableOwner() {
         return tableOwner;
     }
 
@@ -179,5 +203,17 @@ public class Dimension implements Serializable {
 		dimensionEnum.setDimensionId(this);
 		this.dimensionEnum.add(dimensionEnum);
 	}
-
+	//重定义equals方法
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		final Dimension other = (Dimension) obj;
+		if(!this.getName().equals(other.getName()))
+			return false;
+		return true;
+	}
 }
