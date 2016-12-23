@@ -647,6 +647,8 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		try {
 			Page reportInfoList = reportInfoService.getNewDataReport();
 			report = generateJqGridData(reportInfoList);
+			LogRecord.createMngLog("获取可更新/新增的报表", "获取成功","");
+			logger.info("获取可更新/新增的报表成功");
 			/*for(ReportInfoConfig obj : reportInfoList){
 				List<String> drilldownList = new ArrayList<String>();
 				for(Drilldown drilldown : obj.getDrilldownList()){
@@ -659,6 +661,8 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 		} catch (Exception e) {
 			e.printStackTrace();
+			LogRecord.createMngLog("获取可更新/新增的报表", "获取失败","");
+			logger.info("获取可更新/新增的报表失败");
 		}
 		//writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson(result));
 		writerMessage2Client(ServletActionContext.getResponse(), report);
@@ -682,19 +686,23 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		}
 		try{
 			List<ReportInfo> reportInfos = reportInfoService.getReportNum(tableName);
-			ReportInfo reportInfo = reportInfos.get(0);
-			if(StringUtils.isNotBlank(description)){
-				reportInfo.setDescription(description);
+			if(reportInfos.size()!=0){
+				ReportInfo reportInfo = reportInfos.get(0);
+				if(StringUtils.isNotBlank(description)){
+					reportInfo.setDescription(description);
+				}
+				if(StringUtils.isNotBlank(dir)){
+					reportInfo.setPublishDir(dir);
+				}
+
+				//根据报表名称修改报表信息
+				reportInfoService.updateDraftByName(reportInfo);
+				LogRecord.createMngLog("修改报表"+tableName, "修改成功","");
+				logger.info("修改报表："+tableName+"成功");
+
+				writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
 			}
-			if(StringUtils.isNotBlank(dir)){
-				reportInfo.setPublishDir(dir);
-			}
-
-			//根据报表名称修改报表信息
-			reportInfoService.updateDraftByName(reportInfo);
-
-			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
-
+			
 			/*ReportInfo reportInfo = new ReportInfo();
 			reportInfo.setReportId(tableId);
 			reportInfo.setTableName(tableName);
@@ -709,6 +717,8 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			reportInfoService.saveOrUpdateDraft(reportInfo);*/
 		}catch (Exception e){
 			e.printStackTrace();
+			LogRecord.createMngLog("修改报表"+tableName, "修改失败","");
+			logger.info("修改报表："+tableName+"失败");
 			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("false"));
 		}
 
@@ -811,8 +821,8 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		}
 
 		if ((sqlState.equals("success")) && (reportId != null)){
+			//生成xml和sql成功就存库
 			try{
-				//生成xml和sql成功就存库
 				//String reportId = UUID.randomUUID().toString().replaceAll("-", "");
 				if(StringUtils.isBlank(reportInfo.getTableName())){
 					reportInfo.setReportId(reportId);
@@ -838,6 +848,10 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 				//修改元数据配置表报表状态
 				reportInfoService.updateReportMataData(tableName);
+				LogRecord.createMngLog("修改报表元数据配置表:"+tableName, "修改成功","");
+				logger.info("修改报表元数据配置表成功");
+				
+				//返回reportId
 				state = reportId;
 
 			}catch(Exception e){
@@ -845,8 +859,6 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				LogRecord.createMngLog("保存报表草稿:"+reportInfo.getTableName(), "保存失败","");
 				logger.info("保存报表草稿:"+reportInfo.getTableName()+"失败");
 				state = "false";
-				//writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
-				//return;
 			}
 
 		}else{
@@ -857,7 +869,6 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
 			return;
 		}*/
-
 		return state;
 	}
 
@@ -1060,11 +1071,13 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			//copyFile(file, new File(savedir+Constants.FSP+getId()+".xml"));
 			XMLOut.output(Doc, new FileOutputStream(savedir+Constants.FSP+reportId+".xml"));*/
 
+			LogRecord.createMngLog("生成配置文件:"+reportId, "生成成功","");
 			logger.info(reportId+".xml"+"文件生成成功");
 
 
         }catch(Exception e){
             e.printStackTrace();
+			LogRecord.createMngLog("生成配置文件:"+reportId, "生成失败","");
 			logger.info(reportId+".xml"+"文件生成失败");
             reportId = null;
         }
@@ -1120,7 +1133,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
                 }else{
                     //当月累计报表:3 月报表：4
                     buffer.append("#if($start_date && $end_date ) \n\t\t");
-                    buffer.append("AND RECORD_MONTH <= '$start_date' \n\t\t");
+                    buffer.append("AND RECORD_MONTH >= '$start_date' \n\t\t");
                     buffer.append("AND RECORD_MONTH <= '$end_date' \n\t");
                     buffer.append("#else \n\t\t");
                     buffer.append("AND RECORD_MONTH = '$start_date' \n\t");
@@ -1154,13 +1167,14 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 
                 buffWriter.write(buffer.toString());
-
+				LogRecord.createMngLog("生成配置文件:"+drilldown.getQuerySqlId(), "生成成功","");
 				logger.info(drilldown.getQuerySqlId()+".sql文件生成成功");
 
                 buffWriter.close();
                 w.close();
             }catch (Exception e){
                 e.printStackTrace();
+				LogRecord.createMngLog("生成配置文件:"+drilldown.getQuerySqlId(), "生成失败","");
 				logger.info(drilldown.getQuerySqlId()+".sql文件生成失败");
                 return "false";
             }
