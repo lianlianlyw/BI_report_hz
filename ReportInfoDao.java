@@ -300,7 +300,7 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 		});
 		return reportDirList;
 	}
-	//完成配置文件后，修改报表元数据配置表中报表状态
+	//完成配置文件后，修改报表元数据配置表中报表状态（修改为已配置：2）
     public void updateReportMataData(String tableName){
         if(StringUtils.isBlank(tableName)){
             return;
@@ -324,7 +324,7 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
         jdbcTemplate.update(sqlBuff.toString());
     }
 
-	//获取可以进行配置的报表信息lyw
+	//获取可以进行配置的报表信息
 	public Page getNewDataReport() {
 		StringBuffer sqlBuff = new StringBuffer();
 		sqlBuff.append("SELECT DISTINCT" +
@@ -426,6 +426,9 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 					" COL_CHN_NAME, " +
                     " TABLE_OWNER," +
                     " TABLE_NAME, " +
+					" DIM_TABLE_OWNER," +
+					" DIM_TABLE_NAME," +
+					" COL_DESC," +
 					" IS_QUERY " +
 					" FROM CONF_REPROT_TABLE_DICTIONARY " +
 					" WHERE  TABLE_OWNER = '" + drilldown.getTableOwner() + "' " +
@@ -444,6 +447,9 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 						dimension.setIsQuery(rs.getString("IS_QUERY"));
                         dimension.setTableOwner(rs.getString("TABLE_OWNER"));
                         dimension.setTableName(rs.getString("TABLE_NAME"));
+						dimension.setDimTableOwner(rs.getString("DIM_TABLE_OWNER"));
+						dimension.setDimTableName(rs.getString("DIM_TABLE_NAME"));
+						dimension.setDescription(rs.getString("COL_DESC"));
 						dimensionList.add(dimension);
 						//dimensionListR.add(dimension);
 					}while(rs.next());
@@ -488,7 +494,8 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 					" COL_NAME, " +
 					" COL_CHN_NAME," +
 					" TABLE_OWNER," +
-					" TABLE_NAME " +
+					" TABLE_NAME," +
+					" COL_DESC  " +
 					" FROM CONF_REPROT_TABLE_DICTIONARY " +
 					" WHERE  TABLE_OWNER = '" + drilldown.getTableOwner() + "' " +
 					" AND TABLE_NAME = '" + drilldown.getTableName() + "' " +
@@ -505,6 +512,7 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 						measure.setNameChn(rs.getString("COL_CHN_NAME"));
 						measure.setTableName(rs.getString("TABLE_NAME"));
 						measure.setTableOwner(rs.getString("TABLE_OWNER"));
+						measure.setDescription(rs.getString("COL_DESC"));
 						measureList.add(measure);
 						//measureListR.add(measure);
 					}while(rs.next());
@@ -532,8 +540,11 @@ public class ReportInfoDao extends HibernateDao<ReportInfo,String>  {
 
 		//获取报表包含的维度和指标
 		for (Drilldown drilldown : reportInfoConfig.getDrilldownList()){
-			dimensionListR.addAll(drilldown.getDimensions());
-			measureListR.addAll(drilldown.getMeasures());
+			for (Dimension dimension : drilldown.getDimensions()){
+				if(!dimensionListR.contains(dimension)){
+					dimensionListR.add(dimension);
+				}
+			}
 		}
 
 		HashSet<Dimension> dim = new HashSet<Dimension>(dimensionListR);
