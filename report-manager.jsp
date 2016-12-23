@@ -147,14 +147,8 @@
 				}, "json");
 			});
 		});
-		//lyw
-		/*$("#generateXml").die().live("click", function(){
-		 jQuery('#generate_xml').jqGrid('setGridParam',{
-		 url: URL + 'getNewDataReport.action',
-		 //postData: {searchKey:$("#searchKey").val(),state:$("#state").val()}
-		 }).trigger("reloadGrid");
-		 });*/
 
+		//配置报表
 		$("#generateXml").die().live("click",function(){
 			var content = EBUPT.Util.render({tpl : EBUPT.tpl.inputR,data : ""});
 			var dialog = new EBUPT.Util.SuperDialog( {
@@ -169,10 +163,9 @@
 				var rowData = $("#eb_grid_new-report").jqGrid('getRowData',id);
 
 				if(($("#reportId").html()!="false")&&($("#reportId").html()!="")){
-					/*if((id === null || id.length <= 0)&&(($("#reportDescription").val()!="")||($("#dir").val()!=""))){
-						console.log("33")
+					if(!rowData.tablename){
 						$("#submitMessage").html("请勾选报表！");
-					}*/
+					}
 					$.post(URL + "saveReportDraft.action",{"tableName":rowData.tablename,"tableId":$("#reportId").html(),"description":$("#reportDescription").val(),"dir":$("#dir").attr("data")},
 							function(data){
 								if(data == "success"){
@@ -186,6 +179,7 @@
 
 			});
 
+			//选择报表
 			$("#selectReport").die().live("click",function(){
 				$("#generateReport").attr("disabled",false);
 				$("#generateMessage").html("");
@@ -203,6 +197,7 @@
 				//}, "json");
 			});
 
+			//生成报表配置文件
 			$("#generateReport").die().live("click",function() {
 				var id = $('#eb_grid_new-report').jqGrid('getGridParam',"selrow");
 				if(id === null || id.length <= 0 ){
