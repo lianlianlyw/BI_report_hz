@@ -637,14 +637,16 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		return this.writerMessage2Client(response, message.toString());
 	}
 
-	//获取可以进行配置的报表信息lyw
+	/**
+	 * 根据仓库提供的元数据配置表获取可以进行配置的报表信息
+	 * @author lyw
+	 * @throws IOException
+	 */
 	public void getNewDataReport() throws IOException {
 		String report = new String();
 		try {
-			//List<ReportInfoConfig> reportInfoList = reportInfoService.getNewDataReport();
 			Page reportInfoList = reportInfoService.getNewDataReport();
 			report = generateJqGridData(reportInfoList);
-
 			/*for(ReportInfoConfig obj : reportInfoList){
 				List<String> drilldownList = new ArrayList<String>();
 				for(Drilldown drilldown : obj.getDrilldownList()){
@@ -655,7 +657,6 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				result.put("drilldown",drilldownList);
 			}*/
 
-
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -664,7 +665,11 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 	}
 
-	//对生成的报表保存报表描述、发布目录等信息lyw
+	/**
+	 * 配置页面，生成配置文件后，对生成的报表保存报表描述、发布目录等信息
+	 * @author lyw
+	 * @throws IOException
+	 */
 	public void saveReportDraft() throws IOException{
 		HttpServletRequest request = ServletActionContext.getRequest();
 		String tableName = request.getParameter("tableName");
@@ -685,6 +690,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				reportInfo.setPublishDir(dir);
 			}
 
+			//根据报表名称修改报表信息
 			reportInfoService.updateDraftByName(reportInfo);
 
 			writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
@@ -709,7 +715,12 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 	}
 
-	//对选中的报表自动生成id和xml配置文件lyw
+	/**
+	 * 报表生成器主体功能，生成后刷新缓存
+	 * @author lyw
+	 * @throws IOException
+	 * @throws RSException
+	 */
 	public void generateDeployFile() throws IOException,RSException{
 		HttpServletRequest request = ServletActionContext.getRequest();
 		String tableName = request.getParameter("tableName");//报表名字
@@ -740,7 +751,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 				try{
 					//删除sql文件
-					ReportDesign reportDesign = RSXmlLoader.load(request.getSession().getServletContext().getRealPath("report")+Constants.FSP+id+".xml");
+					/*ReportDesign reportDesign = RSXmlLoader.load(request.getSession().getServletContext().getRealPath("report")+Constants.FSP+id+".xml");
 					for(Iterator<BaseDrillDown> iter = reportDesign.getCubeDefinition().getDrillDownList().iterator();iter.hasNext();){
 						Map<String, Object> map = new HashMap<String, Object>();
 						BaseDrillDown drill = iter.next();
@@ -761,7 +772,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 					File xmlFile = new File(savedir+Constants.FSP+id+".xml");
 					if(xmlFile.exists()&&xmlFile.isFile()){
 						xmlFile.delete();
-					}
+					}*/
 
 				}catch (Exception e){
 					e.printStackTrace();
@@ -779,7 +790,17 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson(state));//返回是否生成xml生成xml成功
 	}
 
-	//选中的报表生成配置文件、存库、修改元数据配置表等操作
+	/**
+	 * 生成报表函数，包括生成xml文件、sql文件、将报表ID和报表名称存库、修改元数据配置表信息
+	 * @author lyw
+	 * @param tableName
+	 * @param tableCycleType
+	 * @param reportInfoConfig
+	 * @param reportInfo
+	 * @param request
+	 * @return
+	 * @throws IOException
+	 */
 	public String generateReport(String tableName, String tableCycleType, ReportInfoConfig reportInfoConfig, ReportInfo reportInfo,HttpServletRequest request) throws IOException{
 		String state = new String();
 		//新增报表配置信息
@@ -804,6 +825,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 					reportInfo.setPublishUrl("");
 					reportInfoService.saveOrUpdateDraft(reportInfo);
 					LogRecord.createMngLog("新增报表草稿:"+reportInfo.getTableName(), "新增成功","");
+					logger.info("新增报表草稿:"+reportInfo.getTableName()+"成功");
 				}else{
 					reportInfo.setReportId(reportId);
 					if(StringUtils.equals("1", reportInfo.getState())){
@@ -811,6 +833,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 					}
 					reportInfoService.updateDraftByName(reportInfo);
 					LogRecord.createMngLog("修改报表草稿:"+reportInfo.getTableName(), "修改成功","");
+					logger.info("修改报表草稿:"+reportInfo.getTableName()+"成功");
 				}
 
 				//修改元数据配置表报表状态
@@ -820,6 +843,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			}catch(Exception e){
 				e.printStackTrace();
 				LogRecord.createMngLog("保存报表草稿:"+reportInfo.getTableName(), "保存失败","");
+				logger.info("保存报表草稿:"+reportInfo.getTableName()+"失败");
 				state = "false";
 				//writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
 				//return;
@@ -837,7 +861,16 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		return state;
 	}
 
-	//生成xml文件lyw
+	/**
+	 * 生成xml文件函数
+	 * @author lyw
+	 * @param tableName
+	 * @param tableCycleType
+	 * @param reportInfoConfig
+	 * @param request
+	 * @return
+	 * @throws IOException
+	 */
 	public String generateXmlFile(String tableName,String tableCycleType,ReportInfoConfig reportInfoConfig,HttpServletRequest request) throws IOException{
 		String reportId = UUID.randomUUID().toString().replaceAll("-", "");
 		Dimension dimensionStartDate = new Dimension();
@@ -858,7 +891,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 		//parameters
 		Element parameters = new Element("parameters");
 		for (int i = 0; i < reportInfoConfig.getDimensionList().size(); i++) {
-			if(reportInfoConfig.getDimensionList().get(i).getNameChn().equals("日期")){
+			if(reportInfoConfig.getDimensionList().get(i).getName().equalsIgnoreCase("RECORD_DAY")||reportInfoConfig.getDimensionList().get(i).getName().equalsIgnoreCase("RECORD_MONTH")){
 
 				dimensionStartDate.setParameterId(UUID.randomUUID().toString().replaceAll("-", ""));
 				dimensionStartDate.setName("start_date");
@@ -874,8 +907,8 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				parameter.addContent(new Element("allowInput").setText("true"));
 				parameter.addContent(new Element("allowEmpty").setText("true"));
 				parameter.addContent(new Element("allowMultiValues").setText("true"));
-				parameter.addContent(new Element("defaultValue").setText(""));
-				parameter.addContent(new Element("value").setText(""));
+				parameter.addContent(new Element("defaultValue"));
+				parameter.addContent(new Element("value"));
 				parameter.addContent(new Element("name").setText(dimensionStartDate.getName()));
 				parameter.addContent(new Element("showName").setText(dimensionStartDate.getNameChn()));
 				parameters.addContent(parameter);
@@ -887,8 +920,8 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				parameter.addContent(new Element("allowInput").setText("true"));
 				parameter.addContent(new Element("allowEmpty").setText("true"));
 				parameter.addContent(new Element("allowMultiValues").setText("true"));
-				parameter.addContent(new Element("defaultValue").setText(""));
-				parameter.addContent(new Element("value").setText(""));
+				parameter.addContent(new Element("defaultValue"));
+				parameter.addContent(new Element("value"));
 				parameter.addContent(new Element("name").setText(dimensionEndDate.getName()));
 				parameter.addContent(new Element("showName").setText(dimensionEndDate.getNameChn()));
 				parameters.addContent(parameter);
@@ -906,9 +939,9 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			parameter.addContent(new Element("allowInput").setText("true"));
 			parameter.addContent(new Element("allowEmpty").setText("true"));
 			parameter.addContent(new Element("allowMultiValues").setText("true"));
-			parameter.addContent(new Element("defaultValue").setText(""));
-			parameter.addContent(new Element("value").setText(""));
-			parameter.addContent(new Element("name").setText(reportInfoConfig.getDimensionList().get(i).getName()));
+			parameter.addContent(new Element("defaultValue"));
+			parameter.addContent(new Element("value"));
+			parameter.addContent(new Element("name").setText(reportInfoConfig.getDimensionList().get(i).getName().toUpperCase()));
 			parameter.addContent(new Element("showName").setText(reportInfoConfig.getDimensionList().get(i).getNameChn()));
 
 			parameters.addContent(parameter);
@@ -935,7 +968,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			for (int j = 0;j < reportInfoConfig.getDrilldownList().get(i).getDimensions().size();j++){
 				Dimension dim = reportInfoConfig.getDrilldownList().get(i).getDimensions().get(j);
 				//对日期进行特殊处理
-				if(dim.getNameChn().equals("日期")){
+				if(dim.getName().equalsIgnoreCase("RECORD_DAY")||dim.getName().equalsIgnoreCase("RECORD_MONTH")){
 					Element parameterStartDate = new Element("parameter").setAttribute("id",dimensionStartDate.getParameterId());
 					parameterSet.addContent(parameterStartDate);
 					Element parameterEndDate = new Element("parameter").setAttribute("id",dimensionEndDate.getParameterId());
@@ -956,18 +989,20 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 					//dimension.addContent(new Element("dimensionId").setText(String.valueOf(dim.getId())));
 					dimension.addContent(new Element("copyFrom").setText(reportInfoConfig.getDrilldownList().get(i).getDimensions().get(j).getParameterId()));
 					dimension.addContent(new Element("drillLevel").setText(String.valueOf(dimensionLevel)));
+					dimension.addContent(new Element("dimTable").setText(dim.getDimTableOwner()+"."+dim.getDimTableName()));
 					dimensions.addContent(dimension);
 					dimensionLevel++;
 
 				}
 				//查询列和非查询列都默认加入到指标中
 				Element dimensionMeasure = new Element("measure").setAttribute("id",UUID.randomUUID().toString().replaceAll("-", ""));
-				dimensionMeasure.addContent(new Element("name").setText(dim.getName()));
+				dimensionMeasure.addContent(new Element("name").setText(dim.getName().toUpperCase()));
 				dimensionMeasure.addContent(new Element("dataType").setText("java.Lang.String"));
 				dimensionMeasure.addContent(new Element("dataset").setText(dim.getTableOwner()+'.'+dim.getTableName()));
 				dimensionMeasure.addContent(new Element("column").setText(dim.getName()));
 				dimensionMeasure.addContent(new Element("showName").setText(dim.getNameChn()));
-				dimensionMeasure.addContent(new Element("showFormat").setText(""));
+				dimensionMeasure.addContent(new Element("colDesc").setText(dim.getDescription()));
+				dimensionMeasure.addContent(new Element("showFormat"));
 				measurs.addContent(dimensionMeasure);
 
 				parameterSet.addContent(parameter);
@@ -979,7 +1014,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			Element queryString = new Element("queryString").setAttribute("id",sqlId);
 			queryString.addContent(new Element("language").setText("sql"));
 			queryString.addContent(new Element("vmFile").setText(sqlId+".sql.vm"));
-			queryString.addContent(new Element("expression").setText(""));
+			queryString.addContent(new Element("expression"));
 			drilldown.addContent(queryString);
 
 			drilldown.addContent(dimensions);
@@ -988,12 +1023,13 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			for (int j = 0;j < reportInfoConfig.getDrilldownList().get(i).getMeasures().size();j++){
 				Measure mea = reportInfoConfig.getDrilldownList().get(i).getMeasures().get(j);
 				Element measure = new Element("measure").setAttribute("id",UUID.randomUUID().toString().replaceAll("-", ""));
-				measure.addContent(new Element("name").setText(mea.getName()));
+				measure.addContent(new Element("name").setText(mea.getName().toUpperCase()));
 				measure.addContent(new Element("dataType").setText("Java.Lang.Long"));
 				measure.addContent(new Element("dataset").setText(mea.getTableOwner()+"."+mea.getTableName()));
 				measure.addContent(new Element("column").setText(mea.getName()));
 				measure.addContent(new Element("showName").setText(mea.getNameChn()));
-				measure.addContent(new Element("showFormat").setText(""));
+				measure.addContent(new Element("colDesc").setText(mea.getDescription()));
+				measure.addContent(new Element("showFormat"));
 				measurs.addContent(measure);
 			}
 			drilldown.addContent(measurs);
@@ -1007,10 +1043,10 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
         try{
             Format format = Format.getPrettyFormat();
             XMLOutputter XMLOut = new XMLOutputter(format);
-            //XMLOut.output(Doc, new FileOutputStream("D:/"+reportId+".xml"));
+            XMLOut.output(Doc, new FileOutputStream("D:/"+reportId+".xml"));
 
 			//输出到服务器
-			String savePath = request.getSession().getServletContext().getRealPath("report");
+			/*String savePath = request.getSession().getServletContext().getRealPath("report");
 			File savedir = new File(savePath);
 			if (!savedir.exists()) {
 				savedir.mkdirs();
@@ -1022,29 +1058,39 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				xmlFile.delete();
 			}
 			//copyFile(file, new File(savedir+Constants.FSP+getId()+".xml"));
-			XMLOut.output(Doc, new FileOutputStream(savedir+Constants.FSP+reportId+".xml"));
+			XMLOut.output(Doc, new FileOutputStream(savedir+Constants.FSP+reportId+".xml"));*/
+
+			logger.info(reportId+".xml"+"文件生成成功");
 
 
         }catch(Exception e){
             e.printStackTrace();
+			logger.info(reportId+".xml"+"文件生成失败");
             reportId = null;
         }
         return reportId;
 	}
 
-	//生成sql文件lyw
+	/**
+	 * 生成sql文件函数
+	 * @author lyw
+	 * @param drilldownList
+	 * @param tableType
+	 * @param request
+	 * @return
+	 */
     public String generateSqlFile(List<Drilldown> drilldownList,String tableType,HttpServletRequest request) {
         for (Drilldown drilldown : drilldownList){
             try{
 				//输出到服务器
-				String savePath = request.getSession().getServletContext().getRealPath("report/vm");
+				/*String savePath = request.getSession().getServletContext().getRealPath("report/vm");
 				File savedir = new File(savePath);
 				if (!savedir.exists()) {
 					savedir.mkdirs();
 				}
-				Writer w=new FileWriter(savedir+Constants.FSP+drilldown.getQuerySqlId()+".sql.vm");
+				Writer w=new FileWriter(savedir+Constants.FSP+drilldown.getQuerySqlId()+".sql.vm");*/
 
-                //Writer w=new FileWriter("D:/"+drilldown.getQuerySqlId()+".sql.vm");
+                Writer w=new FileWriter("D:/"+drilldown.getQuerySqlId()+".sql.vm");
                 BufferedWriter buffWriter=new BufferedWriter(w);
 
                 StringBuffer buffer = new StringBuffer();
@@ -1066,7 +1112,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
                     //日报表：1 周报表：2
                     buffer.append("#if($start_date && $end_date ) \n\t\t");
                     buffer.append("AND RECORD_DAY >= '$start_date' \n\t\t");
-                    buffer.append("AND RECORD_DAY >= '$end_date' \n\t");
+                    buffer.append("AND RECORD_DAY <= '$end_date' \n\t");
                     buffer.append("#else \n\t\t");
                     buffer.append("AND RECORD_DAY = '$start_date' \n\t");
                     buffer.append("#end \n\t");
@@ -1074,8 +1120,8 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
                 }else{
                     //当月累计报表:3 月报表：4
                     buffer.append("#if($start_date && $end_date ) \n\t\t");
-                    buffer.append("AND RECORD_MONTH >= '$start_date' \n\t\t");
-                    buffer.append("AND RECORD_MONTH >= '$end_date' \n\t");
+                    buffer.append("AND RECORD_MONTH <= '$start_date' \n\t\t");
+                    buffer.append("AND RECORD_MONTH <= '$end_date' \n\t");
                     buffer.append("#else \n\t\t");
                     buffer.append("AND RECORD_MONTH = '$start_date' \n\t");
                     buffer.append("#end \n\t");
@@ -1084,34 +1130,38 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
                 //筛选条件
                 for(Dimension dimension : drilldown.getDimensions()){
                     if(dimension.getName().equalsIgnoreCase("province_id")){
-						buffer.append("#if($dim_province_id && $dim_city_id) \n\t\t");
-						buffer.append("AND ( province_id in ('$dim_province_id') or city_id in ('$dim_city_id')) \n\t");
-						buffer.append("#elseif($dim_province_id) \n\t\t");
-						buffer.append("AND province_id in ('$dim_province_id') \n\t");
-						buffer.append("#elseif($dim_city_id) \n\t\t");
-						buffer.append("AND city_id in ('$dim_city_id') \n\t").append("#end \n\t");
+						buffer.append("#if($PROVINCE_ID && $CITY_ID) \n\t\t");
+						buffer.append("AND ( province_id in ('$PROVINCE_ID') or city_id in ('$CITY_ID')) \n\t");
+						buffer.append("#elseif($PROVINCE_ID) \n\t\t");
+						buffer.append("AND province_id in ('$PROVINCE_ID') \n\t");
+						buffer.append("#elseif($CITY_ID) \n\t\t");
+						buffer.append("AND city_id in ('$CITY_ID') \n\t").append("#end \n\t");
                     }else if((dimension.getName().equalsIgnoreCase("city_id"))||(dimension.getName().equalsIgnoreCase("record_day"))||(dimension.getName().equalsIgnoreCase("record_month"))){
                         continue;
                     }else{
-						buffer.append("#if($dim_"+dimension.getName().toLowerCase()+ ")  \n\t\t");
 						if(dimension.getIsQuery().equals("1")){
 							//查询列
-							buffer.append("AND "+dimension.getName().toLowerCase()+ " in ('$dim_" +dimension.getName().toLowerCase()+"') \n\t");
-						}else{
+							buffer.append("#if($"+dimension.getName().toUpperCase()+ ")  \n\t\t");
+							buffer.append("AND "+dimension.getName().toLowerCase()+ " in ('$" +dimension.getName().toUpperCase()+"') \n\t");
+							buffer.append("#end \n\t");
+						}/*else{
 							//非查询列
 							buffer.append("AND "+dimension.getName().toLowerCase()+ " = '$dim_" +dimension.getName().toLowerCase()+"' \n\t");
-						}
-						buffer.append("#end \n\t");
+						}*/
+
                     }
                 }
 
 
                 buffWriter.write(buffer.toString());
 
+				logger.info(drilldown.getQuerySqlId()+".sql文件生成成功");
+
                 buffWriter.close();
                 w.close();
             }catch (Exception e){
                 e.printStackTrace();
+				logger.info(drilldown.getQuerySqlId()+".sql文件生成失败");
                 return "false";
             }
         }
