@@ -685,6 +685,12 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 			return;
 		}
 		try{
+			if(StringUtils.isBlank(tableName)){
+				LogRecord.createMngLog("修改报表"+tableName, "修改失败","没有指定报表名称");
+				logger.info("修改报表："+tableName+"失败，没有指定报表名称");
+				writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("false"));
+				return;
+			}
 			List<ReportInfo> reportInfos = reportInfoService.getReportNum(tableName);
 			if(reportInfos.size()!=0){
 				ReportInfo reportInfo = reportInfos.get(0);
@@ -702,7 +708,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 
 				writerMessage2Client(ServletActionContext.getResponse(), mapper.toJson("success"));
 			}
-			
+
 			/*ReportInfo reportInfo = new ReportInfo();
 			reportInfo.setReportId(tableId);
 			reportInfo.setTableName(tableName);
@@ -850,7 +856,7 @@ public class ReportManagerAction extends CrudActionSupport<ReportInfo> {
 				reportInfoService.updateReportMataData(tableName);
 				LogRecord.createMngLog("修改报表元数据配置表:"+tableName, "修改成功","");
 				logger.info("修改报表元数据配置表成功");
-				
+
 				//返回reportId
 				state = reportId;
 
